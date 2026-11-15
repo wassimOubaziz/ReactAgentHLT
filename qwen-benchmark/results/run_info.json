@@ -1,0 +1,16 @@
+{
+  "packages": {
+    "llama-cpp-python": "0.3.4",
+    "torch": "2.5.1+cu121",
+    "sentence-transformers": "5.7.0",
+    "rank-bm25": "0.2.2",
+    "simpleeval": "1.0.8",
+    "numpy": "2.3.5",
+    "pandas": "3.0.1",
+    "tqdm": "4.67.3"
+  },
+  "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+  "seed": 0,
+  "date": "2026-11-15T13:44:51",
+  "git_hash": null
+}

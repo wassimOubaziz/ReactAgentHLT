@@ -1,0 +1,7 @@
+dataset,model,comparison,n_paired,first_right_second_wrong,first_wrong_second_right,p_value
+gsm8k,qwen,CoT vs Standard,200,130,6,1.890095254175509e-31
+gsm8k,qwen,ReAct vs CoT,200,8,72,5.375095844566712e-14
+gsm8k,qwen,Focused ReAct vs ReAct,200,52,18,5.849547318695842e-05
+hotpotqa,qwen,CoT vs Standard,200,10,12,0.8318119049072266
+hotpotqa,qwen,ReAct vs CoT,200,23,18,0.5327092552361137
+hotpotqa,qwen,Focused ReAct vs ReAct,200,29,9,0.0016580525261815637

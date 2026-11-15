@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent viewer — Qwen2.5-3B</title>
+<link rel="stylesheet" href="/viewer.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">Agent trace viewer <span class="muted">Qwen2.5-3B-Instruct (Q4_K_M)</span></div>
+  <div class="controls">
+    <label>Dataset
+      <select id="dataset">
+        <option value="hotpotqa">HotPotQA</option>
+        <option value="gsm8k">GSM8K</option>
+      </select>
+    </label>
+    <label>Agent
+      <select id="agent">
+        <option value="default">Standard</option>
+        <option value="cot">CoT</option>
+        <option value="react">ReAct</option>
+        <option value="focused">Focused ReAct</option>
+      </select>
+    </label>
+    <label id="retriever-label">Retriever
+      <select id="retriever">
+        <option value="sparse">Sparse (BM25)</option>
+        <option value="dense">Dense (MiniLM)</option>
+      </select>
+    </label>
+    <label>Speed
+      <select id="speed">
+        <option value="0">Instant</option>
+        <option value="250">Fast</option>
+        <option value="1200" selected>Slow motion</option>
+        <option value="2200">Very slow</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<section class="picker">
+  <select id="example"><option value="">Loading examples…</option></select>
+  <button id="random" class="ghost" title="Pick a random example">Random</button>
+  <input id="question" type="text" placeholder="…or type your own question">
+  <button id="run">Run ▶</button>
+  <span id="status" class="muted"></span>
+</section>
+
+<div class="pipeline" id="pipeline">
+  <span data-stage="question">Question</span>
+  <span data-stage="prompt">Prompt</span>
+  <span data-stage="llm">LLM</span>
+  <span data-stage="thought">Thought</span>
+  <span data-stage="tool">Tool</span>
+  <span data-stage="observation">Observation</span>
+  <span data-stage="finish">Finish</span>
+</div>
+
+<main class="layout">
+  <section class="trace" id="trace">
+    <p class="placeholder">Pick an example or type a question, then press <b>Run</b>. The page replays the real run step by step: each LLM call, thought, tool call, retrieved passage, observation and the final verdict.</p>
+  </section>
+  <aside class="side">
+    <div class="card stat-grid">
+      <div><span class="k">LLM calls</span><b id="stat-steps">0</b></div>
+      <div><span class="k">Tool calls</span><b id="stat-tools">0</b></div>
+      <div><span class="k">Input tokens</span><b id="stat-in">0</b></div>
+      <div><span class="k">Output tokens</span><b id="stat-out">0</b></div>
+      <div><span class="k">Thinking</span><b id="stat-think">0</b></div>
+      <div><span class="k">Observation</span><b id="stat-obs">0</b></div>
+      <div><span class="k">Candidates / sent</span><b><span id="stat-cand">0</span> / <span id="stat-hits">0</span></b></div>
+      <div><span class="k">Agent time</span><b id="stat-time">0.0 s</b></div>
+    </div>
+    <div class="card">
+      <h3>Scratchpad</h3>
+      <div id="scratch" class="scratch"><span class="muted">Empty. ReAct appends Thought / Action / Observation here.</span></div>
+    </div>
+    <div class="card">
+      <h3>Loop watch</h3>
+      <div id="loop" class="muted">No repeated action yet.</div>
+      <div id="verdict" class="verdict"></div>
+    </div>
+  </aside>
+</main>
+
+<script src="/viewer.js"></script>
+</body>
+</html>

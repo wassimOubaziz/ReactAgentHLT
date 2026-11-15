@@ -1,0 +1,11 @@
+dataset,model,agent_label,total_tokens,correct,tokens_per_correct
+gsm8k,qwen,CoT,101082,159,635.7358490566038
+gsm8k,qwen,Focused ReAct,480475,129,3724.6124031007753
+gsm8k,qwen,ReAct,560115,95,5895.9473684210525
+gsm8k,qwen,Standard,40191,35,1148.3142857142857
+hotpotqa,qwen,CoT,66920,26,2573.846153846154
+hotpotqa,qwen,Focused ReAct,759781,51,14897.666666666666
+hotpotqa,qwen,Focused ReAct (dense),732073,55,13310.418181818182
+hotpotqa,qwen,ReAct,1268759,31,40927.709677419356
+hotpotqa,qwen,ReAct (dense),1300718,36,36131.055555555555
+hotpotqa,qwen,Standard,27492,28,981.8571428571429

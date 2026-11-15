@@ -1,0 +1,13 @@
+# Local model and data that are too large for GitHub
+*.gguf
+dataset/hotpot/hotpot_train_v1.json
+
+# Python / tooling caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.ipynb_checkpoints/
+
+# Local reference papers
+*.pdf
