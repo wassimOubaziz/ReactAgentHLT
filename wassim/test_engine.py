@@ -1,27 +1,22 @@
-r"""Manual test for the wassim model engine.
-
-Run from the project root:
-
-    python -m wassim.test_engine --model .\qwen2.5-3b-instruct-q4_k_m.gguf
-
-For a Hugging Face model folder:
-
-    python -m wassim.test_engine --model "C:\models\gemma-2-2b-it"
-"""
+"""Manual test for the model engine."""
 
 from __future__ import annotations
 
 import argparse
+import sys
 import tempfile
 import time
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if __package__ in (None, ""):
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from wassim.backends import detect_backend
 from wassim.engine import ModelEngine
 
 
 def timed_generate(engine, prompt, **kwargs):
-    """The engine returns no timing, so the caller measures it."""
     start = time.perf_counter()
     first_token = None
 
@@ -44,23 +39,35 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--model",
-        default="qwen2.5-3b-instruct-q4_k_m.gguf",
+        default=str(PROJECT_ROOT / "models" / "qwen2.5-3b-instruct-q4_k_m.gguf"),
         help=".gguf file or Hugging Face model folder",
     )
     parser.add_argument(
         "--prompt",
         default="What is 2 + 2? Reply only Finish[number].",
     )
+    parser.add_argument(
+        "--enable-thinking",
+        action="store_true",
+        help="Allow the model's internal reasoning trace (off by default).",
+    )
     args = parser.parse_args()
 
     print("=" * 60)
     print("1. Backend detection")
     print("=" * 60)
-    if not Path(args.model).exists():
-        print(f"Model not found: {args.model}")
+
+    model_path = Path(args.model)
+    if not model_path.is_absolute() and not model_path.exists():
+        candidate = PROJECT_ROOT / model_path
+        if candidate.exists():
+            model_path = candidate
+
+    if not model_path.exists():
+        print(f"Model not found: {model_path}")
         return
-    kind = detect_backend(args.model)
-    print(f"model: {args.model}")
+    kind = detect_backend(model_path)
+    print(f"model: {model_path}")
     print(f"detected backend: {kind}")
 
     with tempfile.TemporaryDirectory() as folder:
@@ -75,7 +82,7 @@ def main() -> None:
     print("\n" + "=" * 60)
     print("2. Load the model")
     print("=" * 60)
-    engine = ModelEngine(args.model)
+    engine = ModelEngine(model_path, enable_thinking=args.enable_thinking)
     for key, value in engine.info().items():
         print(f"{key}: {value}")
 

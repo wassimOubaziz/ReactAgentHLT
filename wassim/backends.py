@@ -1,4 +1,4 @@
-"""Model backends: GGUF via llama.cpp, Hugging Face folders via transformers."""
+"""GGUF and Hugging Face inference backends."""
 
 from __future__ import annotations
 
@@ -7,27 +7,33 @@ import os
 from pathlib import Path
 from typing import Callable, Iterator
 
-# The caller can send a plain prompt or a chat-style list of messages.
 ChatInput = str | list[dict[str, str]]
 
 
 def _as_messages(prompt: ChatInput) -> list[dict[str, str]]:
-    """Treat a plain string as one user message."""
     if isinstance(prompt, str):
         return [{"role": "user", "content": prompt}]
     return prompt
 
 
 def _plain_text(prompt: ChatInput) -> str:
-    """Fallback for models that have no chat template."""
     messages = _as_messages(prompt)
     if len(messages) == 1:
         return messages[0]["content"]
     return "\n\n".join(message["content"] for message in messages)
 
 
+def _thinking_template_kwargs(template: str | None, enabled: bool) -> dict:
+    if not template:
+        return {}
+    if "enable_thinking" in template:
+        return {"enable_thinking": enabled}
+    if "thinking" in template:
+        return {"thinking": enabled}
+    return {}
+
+
 def detect_backend(model_path: str | Path) -> str:
-    """Return 'gguf' for a .gguf file, 'hf' for a local transformers folder."""
     path = Path(model_path)
     if path.is_file() and path.suffix.lower() == ".gguf":
         return "gguf"
@@ -40,7 +46,6 @@ def detect_backend(model_path: str | Path) -> str:
 
 
 def _device_info() -> dict:
-    """Small model/GPU report."""
     import torch
 
     if not torch.cuda.is_available():
@@ -55,8 +60,6 @@ def _device_info() -> dict:
 
 
 class LlamaCppBackend:
-    """GGUF model through llama-cpp-python, all layers on the GPU."""
-
     name = "llama.cpp"
 
     def __init__(
@@ -65,10 +68,10 @@ class LlamaCppBackend:
         n_ctx: int = 8192,
         n_gpu_layers: int = -1,
         seed: int = 0,
+        enable_thinking: bool = False,
     ):
         import torch
 
-        # On Windows, llama.dll needs torch's CUDA 12 DLLs before it is imported.
         if hasattr(os, "add_dll_directory"):
             os.add_dll_directory(str(Path(torch.__file__).parent / "lib"))
 
@@ -84,10 +87,10 @@ class LlamaCppBackend:
             verbose=False,
         )
         self.chat_template = (self.llm.metadata or {}).get("tokenizer.chat_template")
+        self.enable_thinking = enable_thinking
         self.last_completion_tokens = 0
 
     def render(self, prompt: ChatInput) -> str:
-        """Apply the model's chat template, or use plain text if it has none."""
         if not self.chat_template:
             return _plain_text(prompt)
 
@@ -98,6 +101,7 @@ class LlamaCppBackend:
         return template.render(
             messages=_as_messages(prompt),
             add_generation_prompt=True,
+            **_thinking_template_kwargs(self.chat_template, self.enable_thinking),
         )
 
     def count_tokens(self, text: str) -> int:
@@ -140,6 +144,7 @@ class LlamaCppBackend:
             "backend": self.name,
             "model": str(self.path),
             "chat_template": bool(self.chat_template),
+            "thinking": self.enable_thinking,
             "n_ctx": self.n_ctx,
             **_device_info(),
         }
@@ -154,16 +159,24 @@ class LlamaCppBackend:
 
 
 class HFBackend:
-    """Unquantized Hugging Face model folder through transformers."""
-
     name = "transformers"
 
-    def __init__(self, model_path: str | Path, device_map: str = "auto"):
+    def __init__(
+        self,
+        model_path: str | Path,
+        device_map: str = "auto",
+        enable_thinking: bool = False,
+    ):
         import torch
+        import transformers
+        from packaging.version import Version
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         self.path = Path(model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(str(self.path))
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            str(self.path),
+            trust_remote_code=True,
+        )
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
         self.has_template = bool(getattr(self.tokenizer, "chat_template", None))
@@ -173,25 +186,40 @@ class HFBackend:
         else:
             dtype = torch.float32
         self.dtype = str(dtype)
+
+        load_kwargs = {
+            "trust_remote_code": True,
+            "device_map": device_map,
+        }
+        if Version(transformers.__version__) >= Version("5.0.0"):
+            load_kwargs["dtype"] = dtype
+        else:
+            load_kwargs["torch_dtype"] = dtype
+
         self.model = AutoModelForCausalLM.from_pretrained(
             str(self.path),
-            torch_dtype=dtype,
-            device_map=device_map,
+            **load_kwargs,
         )
         self.model.eval()
+        self.model_type = str(getattr(self.model.config, "model_type", ""))
+        self.enable_thinking = enable_thinking
         self.device = self.model.device
         self.last_completion_tokens = 0
         self._error: Exception | None = None
 
     def render(self, prompt: ChatInput) -> str:
-        """Apply the tokenizer's chat template, or use plain text if it has none."""
         messages = _as_messages(prompt)
         if not self.has_template:
             return _plain_text(messages)
+
         return self.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True,
+            **_thinking_template_kwargs(
+                getattr(self.tokenizer, "chat_template", None),
+                self.enable_thinking,
+            ),
         )
 
     def count_tokens(self, text: str) -> int:
@@ -210,8 +238,6 @@ class HFBackend:
         from transformers import StoppingCriteria, StoppingCriteriaList, TextIteratorStreamer
 
         class StopOnText(StoppingCriteria):
-            """Stop as soon as a stop string or the caller's rule matches."""
-
             def __init__(self, tokenizer, prompt_len, stop_strings, should_stop):
                 super().__init__()
                 self.tokenizer = tokenizer
@@ -239,9 +265,7 @@ class HFBackend:
             skip_prompt=True,
             skip_special_tokens=True,
         )
-        criteria = StopOnText(
-            self.tokenizer, prompt_len, stop_strings, should_stop
-        )
+        criteria = StopOnText(self.tokenizer, prompt_len, stop_strings, should_stop)
         kwargs = {
             **inputs,
             "max_new_tokens": max_new_tokens,
@@ -288,7 +312,9 @@ class HFBackend:
         info = {
             "backend": self.name,
             "model": str(self.path),
+            "model_type": self.model_type,
             "chat_template": self.has_template,
+            "thinking": self.enable_thinking,
             "dtype": self.dtype,
             **_device_info(),
             "device": str(self.device),

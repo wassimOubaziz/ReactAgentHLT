@@ -1,82 +1,71 @@
-# wassim — model inference
+# wassim
 
-Small engine for loading a model and streaming text. It does **not** know about
-ReAct, actions, tools, tasks, or datasets. The agent supplies prompts, history,
-stop rules, and tools.
-
-## Files
-
-- `backends.py` — GGUF via `llama.cpp`, Hugging Face folder via `transformers`.
-- `engine.py` — `ModelEngine.generate(...)`.
-- `test_engine.py` — manual test for both paths and stop rules.
+Local text-generation engine. It loads either a `.gguf` file through llama.cpp or a Hugging Face model folder through transformers.
 
 ## Install
 
 ```powershell
-pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
-pip install llama-cpp-python transformers accelerate jinja2 safetensors sentencepiece
+pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 `
+  --index-url https://download.pytorch.org/whl/cu124
+pip install "transformers>=5.0" accelerate jinja2 safetensors sentencepiece
+pip install llama-cpp-python==0.3.4
 ```
 
-For CUDA, install the prebuilt CUDA wheel of `llama-cpp-python==0.3.4`.
+## Run
 
-## Model path
+From the project root:
 
-- A `.gguf` file → `llama.cpp`, `n_gpu_layers=-1`, `n_ctx=8192`.
-- A folder with `config.json` → `transformers`, bf16/fp16, `device_map="auto"`.
-- Gemma is gated: accept the license and run `huggingface-cli login`.
+```powershell
+python -m wassim.test_engine --model "models\LFM3-1.7B"
+python -m wassim.test_engine --model "models\qwen2.5-3b-instruct-q4_k_m.gguf"
+```
 
-## Use
+Directly from the `wassim` folder:
+
+```powershell
+python test_engine.py --model "D:\ReactAgentHLT_wassim\models\LFM3-1.7B"
+```
+
+## Use in code
 
 ```python
 from wassim.engine import ModelEngine
 
-engine = ModelEngine("qwen2.5-3b-instruct-q4_k_m.gguf")
-
+engine = ModelEngine("D:/models/my-model")
 result = engine.generate(
-    [{"role": "user", "content": "What is 2 + 2? Reply only Finish[number]."}],
+    [{"role": "user", "content": "Hello"}],
     max_new_tokens=64,
     stop_strings=("Observation:",),
-    should_stop=lambda text: "Finish[" in text and "]" in text,
-    on_token=lambda piece: print(piece, end="", flush=True),
 )
-
 print(result.text)
-print(result.completion_tokens)
 engine.unload()
 ```
 
-## `generate(...)` parameters
+`generate` accepts a string or chat messages. Optional parameters: `max_new_tokens`, `stop_strings`, `should_stop`, `on_token`.
 
-| Parameter | Meaning |
-|---|---|
-| `prompt` | A string, or a list of chat messages (`role` + `content`). |
-| `max_new_tokens` | Maximum generated tokens. Default `256`. |
-| `stop_strings` | Literal strings that stop generation. |
-| `should_stop` | Optional `should_stop(text) -> bool` rule from the agent. |
-| `on_token` | Optional callback for each streamed piece. |
+## Model paths
 
-## Return
+- `.gguf` file -> llama.cpp.
+- Folder with `config.json` -> transformers.
+- Any text-generation model supported by the installed backend.
+- Gated models (for example Gemma) need `hf auth login` and a license acceptance.
+- On a 6 GB GPU, use GGUF or quantized models for 7B and larger.
 
-```python
-Generation(text: str, completion_tokens: int)
-```
+## Thinking
 
-Only those two fields. Prompt tokens, TTFT, inference time, stop reason, tools,
-and evaluation are the caller's responsibility.
-
-## Test
-
-Run from the project root:
+Models that support `enable_thinking` or `thinking` in their chat template have it **off** by default. Turn it on with:
 
 ```powershell
-python -m wassim.test_engine --model .\qwen2.5-3b-instruct-q4_k_m.gguf
+python -m wassim.test_engine --model "models\LFM3-1.7B" --enable-thinking
 ```
 
-For a Hugging Face folder:
+Models without a thinking switch are unaffected.
 
-```powershell
-python -m wassim.test_engine --model "C:\models\gemma-2-2b-it"
+## Tested
+
+```text
+LFM3-1.7B: Finish[4], Finish[6], Hello, world!
+Qwen2.5-3B Q4: Finish[4], Finish[6], Hello World!
 ```
 
-The test checks backend detection, loading, streaming, chat messages, stop
-strings, completion tokens, and unload.
+Run the test after any dependency or model change.

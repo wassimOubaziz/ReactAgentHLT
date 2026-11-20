@@ -1,9 +1,4 @@
-"""General streaming text generation.
-
-The engine knows nothing about ReAct, actions, tools, tasks, or datasets.
-It returns only the generated text and the number of completion tokens.
-The caller owns prompts, stop rules, history, tools, timing, and evaluation.
-"""
+"""Streaming text-generation engine."""
 
 from __future__ import annotations
 
@@ -21,8 +16,6 @@ class Generation:
 
 
 class ModelEngine:
-    """Load one model and stream a completion for a prompt or chat messages."""
-
     def __init__(
         self,
         model_path: str | Path,
@@ -30,6 +23,7 @@ class ModelEngine:
         n_ctx: int = 8192,
         device_map: str = "auto",
         n_gpu_layers: int = -1,
+        enable_thinking: bool = False,
     ):
         kind = detect_backend(model_path)
         if kind == "gguf":
@@ -37,9 +31,14 @@ class ModelEngine:
                 model_path,
                 n_ctx=n_ctx,
                 n_gpu_layers=n_gpu_layers,
+                enable_thinking=enable_thinking,
             )
         else:
-            self.backend = HFBackend(model_path, device_map=device_map)
+            self.backend = HFBackend(
+                model_path,
+                device_map=device_map,
+                enable_thinking=enable_thinking,
+            )
 
     def info(self) -> dict:
         return self.backend.info()
@@ -53,11 +52,6 @@ class ModelEngine:
         should_stop: Callable[[str], bool] | None = None,
         on_token: Callable[[str], None] | None = None,
     ) -> Generation:
-        """Stream one completion and return its text and completion tokens.
-
-        The caller decides when to stop by passing stop strings and/or a
-        should_stop(text) callback. The engine does not interpret the text.
-        """
         rendered = self.backend.render(prompt)
         stop = should_stop or (lambda _text: False)
 
